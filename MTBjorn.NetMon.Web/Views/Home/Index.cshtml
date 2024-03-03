@@ -1,0 +1,183 @@
+﻿@*
+	For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+
+<head>
+	<script src="https://cdn.plot.ly/plotly-2.29.1.min.js" charset="utf-8"></script>
+	<style>
+		.invoke-form button {
+			margin-left: 15px;
+			margin-right: 15px;
+		}
+
+		.loader {
+			display: inline-block;
+			border: 3px solid #f3f3f3; /* Light grey */
+			border-top: 3px solid #3498db; /* Blue */
+			border-radius: 50%;
+			width: 12px;
+			height: 12px;
+			animation: spin 2s linear infinite;
+		}
+
+		@@keyframes spin {
+			0% { transform: rotate(0deg); }
+			100% { transform: rotate(360deg); }
+		}
+
+		.hidden {
+			visibility: hidden;
+		}
+	</style>
+</head>
+
+<h1>Network Monitoring</h1>
+<div class="invoke-form">
+	<label for="windowInMinutes">
+		Monitor for:
+		<input type="number" placeholder="1440 (i.e. 1 day)" name="windowInMinutes" id="windowInput"/>
+		&nbsp;minutes
+	</label>
+	<button id="invoke-network-monitor" disabled="true">Start</button>
+	<div id="invoke-loader" class="loader"></div>
+</div>
+<div id="monitor-results-table-full"></div>
+<div id="monitor-results-table-recent"></div>
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		const pollDelayMs = 3000;
+		const resolutionMs = 3000;
+		const invokeMonitorButton = document.getElementById('invoke-network-monitor');
+		const fullResultsTableElement = document.getElementById('monitor-results-table-full');
+		const recentResultsTableElement = document.getElementById('monitor-results-table-recent');
+		const invokeLoaderElement = document.getElementById('invoke-loader');
+		const numberOfPointsInFiveMinuteInterval = (60 / (resolutionMs / 1000)) * 5;
+
+		const renderPlot = (element, points, plotTitle) => {
+			const xValues = points.map(({ x }) => x);
+			const yValues = points.map(({ y }) => y);
+			const trace = {
+				x: xValues,
+				y: yValues,
+				type: 'scatter'
+			};
+			const largestYValue = [...yValues].sort((a, b) => a - b)[yValues.length - 1];
+			const maxYValue = largestYValue > 100 ? largestYValue : 100;
+			const layout = {
+				title: {
+					text: plotTitle
+				},
+				xaxis: {
+					title: {
+						text: 'Time'
+					}
+				},
+				yaxis: {
+					title: {
+						text: 'Latency (ms)'
+					},
+					range: [0, maxYValue]
+				}
+			};
+
+			const plotAlreadyDrawn = element.hasChildNodes();
+			if (plotAlreadyDrawn) {
+				const updateData = {
+					x: [trace.x],
+					y: [trace.y]
+				};
+				const updateLayout = {
+					yaxis: layout.yaxis
+				};
+				Plotly.update(element, updateData, updateLayout);
+			}
+			else {
+				Plotly.newPlot(element, [trace], layout);
+			}
+		}
+
+		const plotMonitorResults = (points) => {
+			renderPlot(fullResultsTableElement, points.slice(), 'Network Latency (all data)');
+
+			// Only generate recent plot once points exceed 5 minutes worth
+			if (points.length > numberOfPointsInFiveMinuteInterval)
+				renderPlot(recentResultsTableElement, points.slice(-1 * numberOfPointsInFiveMinuteInterval), 'Network Latency (last 5 minutes)');
+			else
+				recentResultsTableElement.childNodes.forEach(n => n.remove())
+		};
+
+		const getIsMonitorActive = async () => {
+			const getUrl = "/NetworkLatency/IsMonitorActive"
+			const response = await fetch(getUrl, { method: 'get' });
+			const result = await response.text();
+			const isMonitorActive = result.toLowerCase() === 'true';
+
+			return isMonitorActive;
+		};
+
+		const getMonitorResults = async () => {
+			console.log('Get results');
+
+			const getUrl = "/NetworkLatency/GetResults"
+			const response = await fetch(getUrl, { method: 'get' });
+			const results = await response.json();
+
+			return results.map(({ timestamp, latency }, index) => ({
+				t: index * (resolutionMs / 1000),
+				x: timestamp,
+				y: latency
+			}));
+		};
+
+		const pollForResults = async () => {
+			invokeLoaderElement.classList.remove('hidden');
+
+			const isMonitorActive = await getIsMonitorActive();
+			const results = await getMonitorResults();
+
+			if (results.length > 0)
+				plotMonitorResults(results);
+			else
+				console.log('No results found');
+
+			if (isMonitorActive) {
+				setTimeout(pollForResults, pollDelayMs);
+			}
+			else {
+				console.log('Monitor not active');
+				invokeMonitorButton.disabled = false;
+			}
+
+			invokeLoaderElement.classList.add('hidden');
+		};
+
+		const onInvokeError = async (response) => {
+			const isMonitorActive = await getIsMonitorActive();
+			if (isMonitorActive)
+				console.error('Cannot invoke while monitor is active');
+			else
+				console.error('Failed to invoke monitoring');
+		};
+
+		invokeMonitorButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			invokeLoaderElement.classList.remove('hidden');
+			invokeMonitorButton.disabled = true;
+
+			const windowValue = document.getElementById('windowInput').value;
+			const invokeUrl = `/NetworkLatency/Invoke?windowInMinutes=${windowValue}`
+
+			const response = await fetch(invokeUrl, { method: 'post' });
+
+			if (response.ok)
+				setTimeout(pollForResults, pollDelayMs);
+			else
+				await onInvokeError(response);
+		});
+
+		setTimeout(pollForResults, 100);
+	});
+</script>
