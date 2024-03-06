@@ -14,19 +14,24 @@ docker build -t netmon/v0.1-arm32v7 -f .\arm32v7.Dockerfile .
 docker save -o "C:\image-netmon-v0.1-arm32v7.tar" netmon/v0.1-arm32v7
 
 # Upload image over Putty's SSH file transfer
-PSCP.EXE "C:\image-netmon-v0.1-arm32v7.tar" user@SERVER:Downloads/image-netmon-v0.1-arm32v7.tar
+PSCP.EXE -P 22 "C:\image-netmon-v0.1-arm32v7.tar" user@SERVER:Downloads/image-netmon-v0.1-arm32v7.tar
 
 # Load image into Docker (on remote device)
 docker load -i Downloads/image-netmon-v0.1-arm32v7.tar
 
 # Create container and map local port 7129 to container port 80
-docker create --name netmon -p 7129:80 netmon/v0.1-arm32v7
+docker create --name netmon -p 7129:80 --restart unless-stopped netmon/v0.1-arm32v7
+
+# NOTE: to use a local file as the DB, attach a volume when creating the container
+# docker create --name netmon -p 7129:80 -v /home/{USER_NAME}/DockerData/NetMon/:/app/data/ --restart unless-stopped netmon/v0.1-arm32v7
+# NOTE: download DB file: PSCP.EXE -P 22 user@SERVER:DockerData/NetMon/_network-monitor.db "C:\Downloads\_network-monitor.db"
+# NOTE: to enter container: docker exec -u 0 -it netmon /bin/bash
 
 # Start container
 docker start netmon
 ```
 
-NOTE: set the db file path in the `appsettings.json` configuration according to the directory structure within Docker -- e.g., `/app/_network-monitor.db`
+NOTE: set the db file path in the `appsettings.json` configuration according to the directory structure within Docker -- e.g., `/app/data/_network-monitor.db`
 
 ## Hosting in Docker (x64)
 
@@ -47,6 +52,7 @@ docker start netmon
 
 An example:
 ```powershell
+# Install-Module PSSQLite
 # Get all monitoring request records
 Invoke-SqliteQuery -Query "SELECT * FROM MonitorRequest" -DataSource "C:\Downloads\_network-monitor.db"
 
