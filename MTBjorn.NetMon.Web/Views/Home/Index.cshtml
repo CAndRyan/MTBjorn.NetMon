@@ -43,6 +43,10 @@
 	<button id="invoke-network-monitor" disabled="true">Start</button>
 	<div id="invoke-loader" class="loader"></div>
 </div>
+<label for="selected-request">
+	Select request:
+	<select id="selected-request-input" name="selected-request" disabled="true"></select>
+</label>
 <div id="monitor-results-table-full"></div>
 <div id="monitor-results-table-recent"></div>
 
@@ -54,6 +58,7 @@
 		const fullResultsTableElement = document.getElementById('monitor-results-table-full');
 		const recentResultsTableElement = document.getElementById('monitor-results-table-recent');
 		const invokeLoaderElement = document.getElementById('invoke-loader');
+		const selectedRequestInput = document.getElementById('selected-request-input');
 		const numberOfPointsInFiveMinuteInterval = (60 / (resolutionMs / 1000)) * 5;
 
 		const renderPlot = (element, points, plotTitle) => {
@@ -106,7 +111,7 @@
 			if (points.length > numberOfPointsInFiveMinuteInterval)
 				renderPlot(recentResultsTableElement, points.slice(-1 * numberOfPointsInFiveMinuteInterval), 'Network Latency (last 5 minutes)');
 			else
-				recentResultsTableElement.childNodes.forEach(n => n.remove())
+				recentResultsTableElement.childNodes.forEach(n => n.remove());
 		};
 
 		const getIsMonitorActive = async () => {
@@ -118,10 +123,18 @@
 			return isMonitorActive;
 		};
 
-		const getMonitorResults = async () => {
+		const getMonitorRequests = async () => {
+			const getUrl = "/NetworkLatency/GetRequests"
+			const response = await fetch(getUrl, { method: 'get' });
+			const results = await response.json();
+
+			return results;
+		};
+
+		const getActiveMonitorResults = async () => {
 			console.log('Get results');
 
-			const getUrl = "/NetworkLatency/GetResults"
+			const getUrl = "/NetworkLatency/GetActiveResults"
 			const response = await fetch(getUrl, { method: 'get' });
 			const results = await response.json();
 
@@ -132,11 +145,19 @@
 			}));
 		};
 
+		const hideLoader = () => {
+			invokeLoaderElement.classList.add('hidden');
+		};
+
+		const enableMonitorButton = () => {
+			invokeMonitorButton.disabled = false;
+		};
+
 		const pollForResults = async () => {
 			invokeLoaderElement.classList.remove('hidden');
 
 			const isMonitorActive = await getIsMonitorActive();
-			const results = await getMonitorResults();
+			const results = await getActiveMonitorResults();
 
 			if (results.length > 0)
 				plotMonitorResults(results);
@@ -148,11 +169,44 @@
 			}
 			else {
 				console.log('Monitor not active');
-				invokeMonitorButton.disabled = false;
+				enableMonitorButton();
 			}
 
-			invokeLoaderElement.classList.add('hidden');
+			hideLoader();
 		};
+
+		const loadInitialData = async () => {
+			const requests = await getMonitorRequests();
+
+			if (requests.length == 0) {
+				hideLoader();
+				enableMonitorButton();
+				return;
+			}
+
+			const isMonitorActive = await getIsMonitorActive();
+			if (!isMonitorActive)
+				enableMonitorButton();
+
+			selectedRequestInput.childNodes.forEach(n => n.remove());
+
+			var emptyOption = document.createElement('option');
+			emptyOption.innerText = '-- SELECT --';
+			selectedRequestInput.appendChild(emptyOption);
+
+			requests.forEach(({ id, window, startTime, ipAddress, resolution }) => {
+				const requestOption = document.createElement('option');
+				requestOption.value = id;
+				requestOption.innerText = startTime;
+
+				selectedRequestInput.appendChild(requestOption);
+			});
+
+			// TODO: setup event handler for select
+
+			selectedRequestInput.disabled = false;
+			hideLoader();
+		}
 
 		const onInvokeError = async (response) => {
 			const isMonitorActive = await getIsMonitorActive();
@@ -178,6 +232,6 @@
 				await onInvokeError(response);
 		});
 
-		setTimeout(pollForResults, 100);
+		setTimeout(loadInitialData, 100);
 	});
 </script>

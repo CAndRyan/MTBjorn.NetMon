@@ -54,6 +54,8 @@ public class NetworkService
 		monitorStopwatch.Stop();
 	}
 
+	public async Task<MonitorRequestInfo[]> GetRequests() => await databaseConnection.GetRequests();
+
 	private async Task SaveResult(PingResult result, Guid requestId)
 	{
         responses.Add(result);

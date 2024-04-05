@@ -8,7 +8,6 @@ namespace MTBjorn.NetMon.Web.Controllers;
 [Route("[controller]/[action]")]
 public class NetworkLatencyController : ControllerBase
 {
-	//private static readonly NetworkServiceDriver driver = new NetworkServiceDriver();
 	private readonly NetworkServiceDriver driver;
 
 	private readonly ILogger<NetworkLatencyController> _logger;
@@ -29,5 +28,8 @@ public class NetworkLatencyController : ControllerBase
 	public bool IsMonitorActive() => driver.IsMonitorActive;
 
 	[HttpGet]
-	public IEnumerable<PingResult> GetResults() => driver.GetResults();
+	public IEnumerable<PingResult> GetActiveResults() => driver.GetResults();
+
+	[HttpGet]
+	public async Task<MonitorRequestInfo[]> GetRequests() => await driver.GetRequests();
 }

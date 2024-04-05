@@ -88,4 +88,18 @@ public class NetworkServiceDriver
 
 		return service.CurrentResponses;
 	}
+
+    public async Task<MonitorRequestInfo[]> GetRequests()
+	{
+		var service = ActiveNetworkService;
+
+		if (service is null)
+		{
+			var databaseConnection = await DatabaseConnectionFactory.GetConnection(dbFilePath);
+			service = new NetworkService(databaseConnection);
+			ActiveNetworkService = service;
+		}
+
+        return await service.GetRequests();
+    }
 }

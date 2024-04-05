@@ -1,4 +1,5 @@
-﻿using MTBjorn.NetMon.Core.Network;
+﻿using Microsoft.Data.Sqlite;
+using MTBjorn.NetMon.Core.Network;
 
 namespace MTBjorn.NetMon.Core.Persistence;
 
@@ -37,5 +38,31 @@ VALUES ($timestamp, $latency, $requestId)
 			command.Parameters.AddWithValue("$latency", result.Latency is null ? DBNull.Value : result.Latency.Value);
 			command.Parameters.AddWithValue("$requestId", requestId);
 		});
+	}
+
+	public async Task<MonitorRequestInfo[]> GetRequests()
+	{
+		return await Query((command) =>
+		{
+            command.CommandText = @"
+SELECT *
+FROM MonitorRequest
+";
+        }, ReadMonitorRequestInfo);
+	}
+
+	private static MonitorRequestInfo ReadMonitorRequestInfo(SqliteDataReader reader)
+	{
+		var id = Guid.Parse((string)reader["Id"]);
+        var windowMs = (long)reader["Window"];
+		var window = TimeSpan.FromMilliseconds(windowMs);
+		var startTime = DateTime.Parse((string)reader["StartTime"]);
+
+		return new MonitorRequestInfo(id, window, startTime)
+		{
+			IpAddress = (string)reader["IpAddress"],
+			Resolution = (int)(long)reader["Resolution"],
+			RequestTimeout = (int)(long)reader["RequestTimeout"]
+		};
 	}
 }

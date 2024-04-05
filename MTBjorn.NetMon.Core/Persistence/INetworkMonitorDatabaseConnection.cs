@@ -7,4 +7,6 @@ public interface INetworkMonitorDatabaseConnection
 	Task AddResult(PingResult result, Guid requestId);
 
 	Task AddRequest(MonitorRequestInfo requestInfo);
+
+	Task<MonitorRequestInfo[]> GetRequests();
 }
